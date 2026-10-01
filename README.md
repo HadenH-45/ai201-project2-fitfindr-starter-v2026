@@ -59,24 +59,24 @@
 
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Searches the data of local listings for items that match a free-text description and can be optionally filtered by size and maximum price. It returns the best matches ranked by keyword overlap.
+- **Inputs:** 'description' (str) - Keywords that describe what the user wants such as "vintage graphic tee"; 'size' (str | None) - A size string that is matches case-insensitively against listing's size, or 'None' to skip the filtering using size; 'max_price' (float | None) - The maximum price, inclusive, or 'None' that skips filtering using price.
+- **Returns:** A list containing listing dicts, best match first, each having 'id', 'title', 'description', 'category', 'style_tags' (list), 'size', ' condition', 'price' (float), 'colors' (list), 'brand' (str or 'None'), 'platform' - at most 'config.SEARCH_RESULT_LIMIT of them.
+- **When it has nothing:** Returns an empty list ('[]') - It never returns 'None' or an exception. This is the value the planning lopp branches on.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Calls the model to suggest 1 or 2 outfits that have been built around the chosen listing. It draws on pieces the user is known to have already own when there are any.
+- **Inputs:** 'new_item' (dict) - The listing dict in consideration; 'wardrobe' (dict) - A wardrobe dict that has an 'items' key holding a list of the user's owned pieces which can be empty.
+- **Returns:** A non-empty string with the outfit suggestions.
+- **When it has nothing:** When the wardrobe list is empty, it still will return a non-empty string as well as general styling advice for the item. It will not return an error or '""'.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Calls the model to write a short and postable caption for the found item. It will include the item's name, price, platform is was found on, and the outfit it was chosen to be styled with.
+- **Inputs:** 'outfit' (str) - A suggestion string returned by 'suggest_outfit'; 'new_item' (dict) - The listing dict for the item.
+- **Returns:** A 2-4 sentence caption string. Wording will vary across call on the same input and be driven by 'TEMPERATURE' in the 'config.py'. This means there should be no identical caption return strings.
+- **When it has nothing:** If 'outfit' is empy or whitespace, it will return a descriptive message string rather than calling the model or raising.
 
 ---
 
@@ -93,13 +93,13 @@
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If 'search_listings' returns an empty list then it puts an error message in the session list that names what the user could change instead of simply "no results", and stops before calling 'search_outfit'. Otherwise, it takes the first search resilt as the 'selected_item' and continues to call 'suggest_outfit', then 'create_fit_card'.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex string splitting in '_parse_query()' and in 'agent.py'. 'under $X' (preferred) or a bare '$X' sets 'max_price'; 'size X' sets 'size'; Whatever text remains after stripping those phrases becomes the 'description'.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** 'query' > 'parsed' ('description', 'size', 'max_price') > 'search_results' > 'selected_item' (always 'search_results[0]') > 'outfit_suggestion' > 'fit_card'. 'error' is set and the run stops early at the 'search_results' step if nothing matched.
 
 ---
 

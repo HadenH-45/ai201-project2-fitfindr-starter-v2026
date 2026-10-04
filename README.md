@@ -39,8 +39,7 @@
 
 ## What This Does
 
-<!-- Three or four sentences: what a user asks for, and what they get back. -->
-
+FitFindr takes a plain-language query about a thrift/shopping request and searches for a secondhand clothing listing for the best match. It takes into considerations description, size, and price, as well as any pieces saved in the user's wardrobe. It then writes a postable caption called a fit card that names the item, its price, and platform is is from. If no listings match the request, it stops before calling the styling or captioning tools and informs the user what to change instead.
 
 
 ---
@@ -82,17 +81,6 @@
 
 ## Planning Loop
 
-<!-- Your branch rule, stated as a rule — the condition AND both paths — plus
-     the file and function that holds it.
-
-     Like this:
-       "If search_listings returns an empty list, put a message in the session
-        and stop. Otherwise take the first result and go to suggest_outfit."
-        — agent.py::run_agent
-
-     The grader checks your code against what you claim here, so the file and
-     function have to be real. -->
-
 **Branch rule:** If 'search_listings' returns an empty list then it puts an error message in the session list that names what the user could change instead of simply "no results", and stops before calling 'search_outfit'. Otherwise, it takes the first search resilt as the 'selected_item' and continues to call 'suggest_outfit', then 'create_fit_card'.
 
 **Where it lives:** `agent.py::run_agent`
@@ -105,17 +93,25 @@
 
 ## Sample Run
 
-<!-- Two things go here.
-
-     1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
-
 **One full query**
 
-```
-$ python app.py ask '...'
+python app.py ask 'vintage graphic tee under $30, size M'
 
-```
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   **Outfit 1: Y2K Streetwear**
+*   **Top:** Y2K Baby Tee — Butterfly Print ($18)
+*   **Bottoms:** Baggy straight-leg jeans, dark wash (`w_001`)
+*   **Shoes:** Chunky white sneakers (`w_007`)
+*   **Outerwear/Layer:** Black cropped zip hoodie (`w_005`) worn open
+
+**Outfit 2: Casual Casual Contrast**
+*   **Top:** Y2K Baby Tee — Butterfly Print ($18)
+*   **Bottoms:** Wide-leg khaki trousers (`w_002`)
+*   **Shoes:** Chunky white sneakers (`w_007`)
+*   **Accessories:** Black crossbody bag (`w_010`)
+
+  Fit card: Scored this little butterfly print baby tee on Depop for just $18, and honestly, it’s giving major early 2000s mall-goth energy. I paired it with baggy dark-wash denim and a cropped ziphoodie for peak Y2K streetwear vibes. Secondhand finds really just hit different sometimes! 🦋✨
 
 **The three tools, tested one at a time**
 
@@ -156,15 +152,15 @@ Scored these vintage Levi's 501 jeans on Depop for just $38 and Iam never taking
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* *What I asked for:* I gave Claude the search_listings spec from tools.py, including the docstring warning that a plain substring test on size is broken ("s" in "us 9" is True, and so is "l" in "xl").
+- *What came back:* It gave me a substring check
+- *What I changed:* I turned it into a size_matches() helper that splits both the listing's size and the query size into uppercase tokens and checks for any shared token — so "M" matches "S/M", but "L" does not false-match "XL".
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Claude to implement suggest_outfit()
+- *What came back:* Made a function it formats and returns each item generically
+- *What I changed:* Added the empty wardrobe case from the spec.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 

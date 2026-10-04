@@ -20,9 +20,40 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
+import re
+
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
+
+
+# ── Helpers (used by the tools below) ─────────────────────────────────────────
+
+def _keywords(text: str) -> set[str]:
+    """Lowercase alphanumeric tokens in `text`, for keyword-overlap scoring."""
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _size_matches(listing_size: str, query_size: str) -> bool:
+    """
+    True if `query_size` matches `listing_size`, token by token rather than by
+    substring. "M" matches "S/M" (shared token "M"), but "L" does NOT match
+    "XL" (no shared token), and "9" matches "US 9" without "S" in "US 9"
+    falsely matching a query of "S".
+    """
+    def tokens(s: str) -> set[str]:
+        return {t for t in re.split(r"[^A-Za-z0-9]+", s.upper()) if t}
+
+    return bool(tokens(listing_size) & tokens(query_size))
+
+
+def _describe_wardrobe_item(item: dict) -> str:
+    """A short human-readable line for one wardrobe item, for prompt text."""
+    if not isinstance(item, dict):
+        return str(item)
+    name = item.get("name") or item.get("title") or str(item)
+    extras = [str(v) for k, v in item.items() if k not in ("name", "title") and v]
+    return f"{name} ({', '.join(extras)})" if extras else str(name)
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
@@ -78,8 +109,41 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    listings = load_listings()
+
+    filtered = []
+    for item in listings:
+        if max_price is not None and item["price"] > max_price:
+            continue
+        if size is not None and not _size_matches(item["size"], size):
+            continue
+        filtered.append(item)
+
+    query_keywords = _keywords(description) if description else set()
+
+    scored = []
+    for item in filtered:
+        listing_text = " ".join([
+            item.get("title", ""),
+            item.get("description", ""),
+            item.get("category", ""),
+            " ".join(item.get("style_tags", [])),
+        ])
+        listing_keywords = _keywords(listing_text)
+
+        if query_keywords:
+            score = len(query_keywords & listing_keywords)
+            if score == 0:
+                continue
+        else:
+            # No description to score against — rank everything that passed
+            # the size/price filters equally rather than dropping it all.
+            score = 1
+
+        scored.append((score, item))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _score, item in scored[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -112,8 +176,38 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    item_desc = (
+        f"{new_item.get('title')} ({new_item.get('category')}, "
+        f"colors: {', '.join(new_item.get('colors', [])) or 'unspecified'}, "
+        f"${new_item.get('price')} on {new_item.get('platform')})"
+    )
+
+    items = wardrobe.get("items", [])
+    if not items:
+        prompt = (
+            f"A user is considering buying this secondhand item:\n{item_desc}\n\n"
+            "They don't have any wardrobe items on file yet. Suggest one or two "
+            "outfit ideas for this piece using common wardrobe basics (e.g. "
+            "jeans, a plain tee, white sneakers) rather than specific items you "
+            "can't see. Keep it brief and practical."
+        )
+    else:
+        wardrobe_lines = "\n".join(f"- {_describe_wardrobe_item(i)}" for i in items)
+        prompt = (
+            f"A user is considering buying this secondhand item:\n{item_desc}\n\n"
+            f"Here is what's already in their wardrobe:\n{wardrobe_lines}\n\n"
+            "Suggest one or two outfits that pair the new item with pieces they "
+            "already own, naming those pieces specifically. Keep it brief and "
+            "practical."
+        )
+
+    response = generate(prompt)
+    if not response.strip():
+        return (
+            "Try pairing this with simple neutral basics you likely already "
+            "own — jeans or trousers, a plain top, and clean sneakers."
+        )
+    return response
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +246,31 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return (
+            f"No outfit suggestion was available, so here's the find on its "
+            f"own: {new_item.get('title')} — ${new_item.get('price')} on "
+            f"{new_item.get('platform')}."
+        )
+
+    item_desc = (
+        f"{new_item.get('title')}, priced at ${new_item.get('price')} on "
+        f"{new_item.get('platform')}"
+    )
+    prompt = (
+        f"Write a short, postable caption (two to four sentences) for someone "
+        f"sharing a secondhand fashion find.\n\n"
+        f"The item: {item_desc}.\n"
+        f"The outfit it's being styled with: {outfit}\n\n"
+        "Write it like a real social post, not a product description. Mention "
+        "the item, its price, and its platform exactly once each. Be specific "
+        "about the vibe."
+    )
+
+    response = generate(prompt)
+    if not response.strip():
+        return (
+            f"Just scored {new_item.get('title')} for ${new_item.get('price')} "
+            f"on {new_item.get('platform')} — styling it with {outfit}."
+        )
+    return response

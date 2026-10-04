@@ -25,10 +25,7 @@ Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
-
+The initial search step relies on keyword matching across user inputs and listing metadata, so there will be natural language variation in search queries that can occasionally fail to match listings. 4 out of 5 allows for this margin while still enforcing high overall reliability.
 ---
 
 ## 2. An impossible query stops before the second tool
@@ -44,59 +41,32 @@ Given a query that matches no listings, the agent stops before calling
 
 ## 3. Something about state
 
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
+Given a successful search that populates the session state, the session["selected_item"]'s id strictly matches the item object passed into suggest_outfit().
 
 
 **Why this target:**
 
-
+A target of 5 of 5 is essential because the state propogation is a determistic not probabilistic model output. The tool calls will recieve corrupted or mismatched data if the state payload mutates, drops fields, or selects different item mid-pipeline.
 
 ---
 
 ## 4. Something about the fit card
 
-<!-- YOU WRITE THIS ONE.
-
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+Given a valid item and outfit recommendation from suggest_outfit(), create_fit_card() must generate a caption that references at least one specific attribute of the selected item like brand, color, or style term, and stays within 280 characters through 4 out of 5 tries.
 
 **Why this target:**
 
-
+Since create_fit_card() calls an LLM, temperature and prompt sampling introduce variability in wording. Target setting at 4 of 5 allows for minor non-deterministic output variances while enforcing strict, verifiable constraints on length and core contextual grounding.
 
 ---
 
 ## 5. Your choice
 
-<!-- YOU WRITE THIS ONE TOO.
-
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
+Given a non-empty user wardrobe, the recommendations returned by suggest_outfit() must incorporate or complement at least one specific item from the user's wardrobe and match by color, aesthetic, or item type in at least 4 out of 5 tries.
 
 **Why this target:**
 
-
+The agent should not default to generic styling advice when wardrobe context is present. A target of 4 of 5 ensures the model effectively conditions its styling output on existing session state without failing when wardrobe descriptions are minimal or edge-case items are used.
 
 ---
 
